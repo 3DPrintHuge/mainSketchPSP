@@ -12,15 +12,19 @@ const int enPinVert   = 7;
 
 const int endPin = A0;
 
+const int stepDelay = 10;
+
 // platform motor parameters
-signed long dplatPPS        = 1600; // desired platform pulse frequence [pulses/second]
+float platGain              = 1;
+signed long dplatPPS        = 1600*platGain; // desired platform pulse frequence [pulses/second]
 unsigned long platPeriod    = 625;  // desired platform pulse period  [microseconds]
 unsigned long platPPR       = 1600; // pulses per revolution on platform motor driver
 unsigned long platPos       = 0;    // platform motor position [steps]
 unsigned long setPlatPos    = 0;    // desired platform motor position [steps]
 
 // vertical motor parameters
-unsigned long dvertPPS      = 1600; // desired vertical pulse frequency [pulses/second]
+float vertGain              = 1;
+unsigned long dvertPPS      = 1600*vertGain; // desired vertical pulse frequency [pulses/second]
 unsigned long vertPeriod    = 625;  // desired verticval period [microseconds]
 unsigned long vertPPR       = 1600; // pulses per revolution on vertical motor driver
 unsigned long vertPos       = 0;    // vertical motor position [steps]
@@ -190,7 +194,7 @@ void decodeMessage() {
 //  --- VALUE RELATED COMMANDS ---  //
   //set platform pulses per second
   if (commandString == "platPPS") {
-    dplatPPS= value;  //set platform pulses per second
+    dplatPPS= value*platGain;  //set platform pulses per second
     platPeriod = (1000000 / dplatPPS); //setplatform period in microseconds
 
     Serial.print("platPPS: ");
@@ -236,7 +240,7 @@ void decodeMessage() {
 
   //set vertical ppulses per second
   if (commandString == "vertPPS") {
-   dvertPPS= value;  //set vertical pulses per second
+   dvertPPS= value*vertGain;  //set vertical pulses per second
     Serial.print("vertPPS: ");
     Serial.print( dvertPPS);
     Serial.print("\n\r");
@@ -311,6 +315,7 @@ void decodeMessage() {
   if (commandString == "slowAll") {
     slowBool = true;
     runspdBool = false;
+    q= true;
     //rampi=rampSteps;
 
     commandString = "";
@@ -339,6 +344,7 @@ void decodeMessage() {
     runspdBool = true;
     slowBool= false;
     disableBool = false;
+    q=true;
 
     
     //rampi=0;
@@ -391,9 +397,13 @@ void stepPlatform() {
   //  Serial.println("stepplatform");
 
   //toggle pulpin for one step
-  digitalWrite(pulPinPlat, LOW);
-  delayMicroseconds(10);
-  digitalWrite(pulPinPlat, HIGH);
+//  digitalWrite(pulPinPlat, LOW);
+//  delayMicroseconds(stepDelay);
+//  digitalWrite(pulPinPlat, HIGH);
+
+  PORTD = PORTD^B00100000;
+  delayMicroseconds(stepDelay);
+  PORTD = PORTD|B00100000;
   //Serial.println(platPos);
   //Serial.println(platPPR);
   if (platDirBool){ 
@@ -406,19 +416,20 @@ void stepPlatform() {
     
     if (platPos == 0) {platPos= platPPR;}
     platPos--;
-    };
-
-  
-   
+    };   
   
 }
 
 void stepVertical() {
 
   //toggle pulpin for one step
-  digitalWrite(pulPinVert, LOW);
-  delayMicroseconds(10);
-  digitalWrite(pulPinVert, HIGH);
+//  digitalWrite(pulPinVert, LOW);
+//  delayMicroseconds(stepDelay);
+//  digitalWrite(pulPinVert, HIGH);
+
+PORTB = PORTB^B00000010;
+  delayMicroseconds(stepDelay);
+  PORTB = PORTB|B00000010;
 
   if (vertDirBool){ vertPos++;}
   else{ vertPos--;};
@@ -431,7 +442,7 @@ void stepVertical() {
 
 void runspd(){
 
-   platRampPeriod = (1000000 / cplatPPS); // pulse period of platform motor
+   platRampPeriod = (1000000 / dplatPPS); // pulse period of platform motor
   vertRampPeriod = (1000000 / cvertPPS);  //pulse period of vertical motor
   // ^ period will increase with respect to rampi and will eventually reach value set by the user ^
   
@@ -448,7 +459,7 @@ void runspd(){
 
     }
 
-    if (cMillis - pMillis >= rampInterval) {
+    if (cMillis - pMillis >= rampInterval && q) {
 
       if (rampi < rampSteps) {
         rampi++;
@@ -461,7 +472,7 @@ void runspd(){
         //Serial.print("rampSteps: ");Serial.print(rampSteps);Serial.print("\n\r");
 
       }
-      if (rampi == rampSteps && q) {
+      if (rampi == rampSteps) {
         Serial.println("max speed");
         //Serial.println(cplatPPS);
         cplatPPS = dplatPPS;
@@ -494,7 +505,7 @@ void slowAll(){
 
     }
 
-    if (cMillis - pMillis >= rampInterval) {
+    if (cMillis - pMillis >= rampInterval && q) {
 
       if (rampi > 1) {
         rampi--;
@@ -511,7 +522,7 @@ void slowAll(){
 
       }
 
-      if (rampi == 1 && q) {
+      if (rampi == 1) {
         Serial.println("stopped");
         cplatPPS = 1;
         cvertPPS = 1;
@@ -532,6 +543,8 @@ void slowAll(){
 // change plat to vert
 void homing(){
   platDirBool = false;
+  endRead = analogRead(endPin);
+  if(endRead>512){endBool = true;} else {endBool =false;};
   setDir();
   
   while(!endBool){
@@ -598,18 +611,15 @@ void loop() {
   cTimeVert = micros();
   cMillis = millis();
 
-  endRead = analogRead(endPin);
-  if(endRead>512){endBool = true;} else {endBool =false;};
-  
-
   if (disableBool) {
     digitalWrite(enPinPlat, LOW);
+    digitalWrite(enPinVert, LOW);
     //digitalWrite(enPinPlat, HIGH);
     
     z = true;
-  } 
-  else {
+  } else {
     digitalWrite(enPinPlat, HIGH);
+    digitalWrite(enPinVert, HIGH);
     if (z) {
       Serial.println("delay");
       delay(2500);
@@ -617,6 +627,7 @@ void loop() {
     }
 
   }
+  
   if (initBool){
     homing();
   }
