@@ -16,7 +16,7 @@ const int endPin = A0;
 const int stepDelay = 100;
 
 // platform motor parameters
-float platGain              = 1.25;
+float platGain              = 1;
 signed long dplatPPS        = 1600*platGain; // desired platform pulse frequence [pulses/second]
 unsigned long platPeriod    = 625;  // desired platform pulse period  [microseconds]
 unsigned long platPPR       = 1600; // pulses per revolution on platform motor driver
@@ -24,7 +24,7 @@ unsigned long platPos       = 0;    // platform motor position [steps]
 unsigned long setPlatPos    = 0;    // desired platform motor position [steps]
 
 // vertical motor parameters
-float vertGain              = 1.25;
+float vertGain              = 1;
 unsigned long dvertPPS      = 1600*vertGain; // desired vertical pulse frequency [pulses/second]
 unsigned long vertPeriod    = 625;  // desired verticval period [microseconds]
 unsigned long vertPPR       = 1600; // pulses per revolution on vertical motor driver
@@ -50,8 +50,8 @@ unsigned long cMillis   = 0;  // current time
 unsigned long pMillis   = 0;  // previous time
 
 // ramp variables
-unsigned long rampTime  = 0.5 * 1000; //time in milliseconds
-int rampInterval        = 10; // time between ramp steps [ms]
+unsigned long rampTime  = 5 * 1000; //time in milliseconds
+int rampInterval        = 100; // time between ramp steps [ms]
 int rampi               = 1;  // ramp counter
 signed int rampSteps    = 50; //amount of steps in ramp
 
@@ -90,6 +90,17 @@ float diffMean=0;
 
 unsigned long cMicros= 0 ;
 
+enum Commands { PlatPPS, PlatDir, PlatPPR, MovePlat, IncPlat,
+                VertPPS, VertDir, VertPPR, MoveVert, IncVert,
+                SetRamp, Initialize, RunSpd, SlowAll, StopAll,
+                Default};
+
+enum Mode {DisableAll, EnableAll, Homing, Speed, StepPlatform, StepVertical };
+
+Mode mode = DisableAll;
+Commands inputCommand = Default;
+
+
 void setup() {
   //put your setup code here, to run once:
 
@@ -117,53 +128,55 @@ void setup() {
   platPos       = 0;
 
   Serial.begin(2000000);
+
 }
 
 void loop() {
-
-  if (disableBool) {
-    digitalWrite(enPinPlat, LOW);
-    digitalWrite(enPinVert, LOW);
-    //digitalWrite(enPinPlat, HIGH);
-    
-    z = true;
-  } else {
-    digitalWrite(enPinPlat, HIGH);
-    digitalWrite(enPinVert, HIGH);
-    if (z) {
-      Serial.println("delay");
-      delay(2500);
-      z = false;
-    }
-
-  }
   
-  if (initBool){
-    homing();
-  }
+  // put your main code here, to run repeatedly:
 
-  if (runspdBool ) {
-    runspd();
-  }
+  switch (mode) {
+    
+    case DisableAll:
 
-  if (slowBool) {
-    slowAll();
-  }
+      digitalWrite(enPinPlat, LOW);
+      z = true;
+      break;
 
-  if (incPlatBool) {
-    stepPlatform();
-    incPlatBool = false;
-  }
+    case EnableAll:
 
-  if (incVertBool) {
-    stepVertical();
-    incVertBool = false;
+      digitalWrite(enPinPlat, HIGH);
+      if (z) {
+        Serial.println("delay");
+        delay(2500);
+        z = false;
+      }
+      break;
+
+    case Homing:
+        homing();
+      break;
+
+    case Speed:
+    if(runspdBool){runspd();}
+    else if (slowBool){slowAll();}
+      break;
+
+    case StepPlatform:
+        stepPlatform();
+        incPlatBool = false;
+      break;
+
+    case StepVertical:
+        stepVertical();
+        incVertBool = false;
+        break;
+    default:
+    break;
   }
 
 
 }
-
-
 
 void serialEvent() {
 
@@ -251,7 +264,7 @@ void decodeMessage() {
 //  --- VALUE RELATED COMMANDS ---  //
   //set platform pulses per second
   if (commandString == "platPPS") {
-    dplatPPS= value*platGain;  //set platform pulses per second
+    dplatPPS= value;  //set platform pulses per second
     platPeriod = (1000000 / dplatPPS); //setplatform period in microseconds
 
     Serial.print("platPPS: ");
@@ -265,7 +278,7 @@ void decodeMessage() {
   }
 
   //set platform direction
-  if (commandString == "platDir") {
+  else if (commandString == "platDir") {
 
     //set direction parameter for platform motor
     if (value > 0) {
@@ -280,14 +293,14 @@ void decodeMessage() {
   }
 
   //set platform pulses per revolution
-  if (commandString == "platPPR") {
+  else if (commandString == "platPPR") {
     platPPR = value; //set platform pulses per period
 
     commandString = ""; //clear string
   }
 
   //rotate platform to position
-  if (commandString == "movePlat") {
+  else if (commandString == "movePlat") {
     setPlatPos = value; //set desired platform position
     disableBool = false;
     gotoPlat(); //activate move to position function
@@ -296,8 +309,8 @@ void decodeMessage() {
   }
 
   //set vertical ppulses per second
-  if (commandString == "vertPPS") {
-   dvertPPS= value*vertGain;  //set vertical pulses per second
+  else if (commandString == "vertPPS") {
+   dvertPPS= value;  //set vertical pulses per second
     Serial.print("vertPPS: ");
     Serial.print( dvertPPS);
     Serial.print("\n\r");
@@ -306,7 +319,7 @@ void decodeMessage() {
   }
 
   //set vertical direction
-  if (commandString == "vertDir") {
+  else if (commandString == "vertDir") {
 
     //set direction parameter for vertical motor
     if (value > 0) {
@@ -321,14 +334,14 @@ void decodeMessage() {
   }
 
   //set vertical pulsesper revolution
-  if (commandString == "vertPPR") {
+  else if (commandString == "vertPPR") {
     vertPPR = value; //set vertical pulses per revolution
 
     commandString = ""; //clear string
   }
 
   //move vertically to position
-  if (commandString == "movePlat") {
+  else if (commandString == "movePlat") {
     setPlatPos = value; //set desired platform position
     disableBool = false;
     gotoPlat(); //activate move to position function
@@ -337,7 +350,7 @@ void decodeMessage() {
   }
 
   //set ramptime in [ms]
-  if (commandString == "setRamp") {
+  else if (commandString == "setRamp") {
     rampTime = value; //set ramp time
     Serial.print("rampTime [ms]: ");
     Serial.print(rampTime);
@@ -345,9 +358,8 @@ void decodeMessage() {
 
     commandString = ""; //clear string
   }
-
-
-    if (commandString == "setInterval") {
+  
+  else if (commandString == "setInterval") {
       rampInterval = value;
   
       commandString = "";
@@ -364,32 +376,34 @@ void decodeMessage() {
     if (commandString == "init") {
       initBool =true;
       disableBool = false;
+      mode = Homing;
   
       commandString = "";
     }
  
   //slow all motors
-  if (commandString == "slowAll") {
+  else if (commandString == "slowAll") {
     slowBool = true;
     runspdBool = false;
-    q= true;
+    
     //rampi=rampSteps;
 
     commandString = "";
   }
 
   //emergency stop all motors
-  if (commandString == "stopAll") {
+  else if (commandString == "stopAll") {
     disableBool = true;
     slowBool = false;
     runspdBool = false;
+    mode= DisableAll;
     Serial.println("disabled");
 
     commandString = ""; //clear string
   }
 
   //run platform based on speed
-  if (commandString == "runspd") {
+  else if (commandString == "runspd") {
 
     if(!runspdBool) {
       //reset parameters
@@ -401,7 +415,7 @@ void decodeMessage() {
     runspdBool = true;
     slowBool= false;
     disableBool = false;
-    q=true;
+    mode= Speed;
 
     
     //rampi=0;
@@ -410,17 +424,19 @@ void decodeMessage() {
   }
 
   //send a pulse to platform motor
-  if (commandString == "incPlat") {
+  else if (commandString == "incPlat") {
     incPlatBool = true;
     disableBool = false;
+    mode= StepPlatform;
 
     commandString = ""; //clear string
   }
 
   //send a pulse to vertical motor
-  if (commandString == "incVert") {
+  else if (commandString == "incVert") {
     incVertBool = true;
     disableBool = false;
+    mode = StepVertical;
 
     commandString = ""; //clear string
   }
@@ -507,7 +523,7 @@ void runspd(){
   //cTimeVert = micros();
   cMicros = micros();
   cMillis = millis();
-    progStartTime= micros();
+  progStartTime= micros();
     unsigned long deltaPlat = cMicros - pTimePlatform;
 
    platRampPeriod = (1000000 / cplatPPS); // pulse period of platform motor
@@ -697,5 +713,4 @@ int calcRampi() {
   }
   
 }
-
 
