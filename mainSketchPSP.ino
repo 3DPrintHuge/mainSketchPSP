@@ -1,3 +1,4 @@
+#include <eRCaGuy_Timer2_Counter.h>
 
 const int ledPin = 2;
 
@@ -12,10 +13,10 @@ const int enPinVert   = 7;
 
 const int endPin = A0;
 
-const int stepDelay = 10;
+const int stepDelay = 100;
 
 // platform motor parameters
-float platGain              = 1;
+float platGain              = 1.25;
 signed long dplatPPS        = 1600*platGain; // desired platform pulse frequence [pulses/second]
 unsigned long platPeriod    = 625;  // desired platform pulse period  [microseconds]
 unsigned long platPPR       = 1600; // pulses per revolution on platform motor driver
@@ -23,7 +24,7 @@ unsigned long platPos       = 0;    // platform motor position [steps]
 unsigned long setPlatPos    = 0;    // desired platform motor position [steps]
 
 // vertical motor parameters
-float vertGain              = 1;
+float vertGain              = 1.25;
 unsigned long dvertPPS      = 1600*vertGain; // desired vertical pulse frequency [pulses/second]
 unsigned long vertPeriod    = 625;  // desired verticval period [microseconds]
 unsigned long vertPPR       = 1600; // pulses per revolution on vertical motor driver
@@ -81,6 +82,14 @@ bool platDirBool  = false;  // shows if platDirBool command is active
 bool vertDirBool  = false;  // shows if vertDirBool command is active
 bool initBool     = false;  // shows if init command is active
 
+int progCount = 1;
+unsigned long progStartTime= 0;
+unsigned long progEndTime =0;
+float diff = 0;
+float diffMean=0;
+
+unsigned long cMicros= 0 ;
+
 void setup() {
   //put your setup code here, to run once:
 
@@ -102,11 +111,59 @@ void setup() {
   digitalWrite(pulPinVert, HIGH);
   digitalWrite(dirPinVert, HIGH);
   digitalWrite(enPinVert, HIGH);
+
+  timer2.setup();
   
   platPos       = 0;
 
-  Serial.begin(9600);
+  Serial.begin(2000000);
 }
+
+void loop() {
+
+  if (disableBool) {
+    digitalWrite(enPinPlat, LOW);
+    digitalWrite(enPinVert, LOW);
+    //digitalWrite(enPinPlat, HIGH);
+    
+    z = true;
+  } else {
+    digitalWrite(enPinPlat, HIGH);
+    digitalWrite(enPinVert, HIGH);
+    if (z) {
+      Serial.println("delay");
+      delay(2500);
+      z = false;
+    }
+
+  }
+  
+  if (initBool){
+    homing();
+  }
+
+  if (runspdBool ) {
+    runspd();
+  }
+
+  if (slowBool) {
+    slowAll();
+  }
+
+  if (incPlatBool) {
+    stepPlatform();
+    incPlatBool = false;
+  }
+
+  if (incVertBool) {
+    stepVertical();
+    incVertBool = false;
+  }
+
+
+}
+
+
 
 void serialEvent() {
 
@@ -442,20 +499,38 @@ PORTB = PORTB^B00000010;
 
 void runspd(){
 
-   platRampPeriod = (1000000 / dplatPPS); // pulse period of platform motor
+  bool printsteptime= false;
+  unsigned long per=0;
+
+
+    //cTimePlatform = micros();
+  //cTimeVert = micros();
+  cMicros = micros();
+  cMillis = millis();
+    progStartTime= micros();
+    unsigned long deltaPlat = cMicros - pTimePlatform;
+
+   platRampPeriod = (1000000 / cplatPPS); // pulse period of platform motor
   vertRampPeriod = (1000000 / cvertPPS);  //pulse period of vertical motor
   // ^ period will increase with respect to rampi and will eventually reach value set by the user ^
   
-      if (cTimePlatform - pTimePlatform >= (platRampPeriod) ) {
+      if ( deltaPlat >= (platRampPeriod) ) {
+        printsteptime=true;
+        per = cTimePlatform - pTimePlatform;
 
-      stepPlatform();
-      pTimePlatform = cTimePlatform;
+      PORTD = PORTD^B00100000;
+      delayMicroseconds(stepDelay);
+      PORTD = PORTD|B00100000;
+      pTimePlatform = cMicros;
 
     }
 
-    if (cTimeVert - pTimeVert >= (vertRampPeriod) ) {
-      stepVertical();
-      pTimeVert = cTimeVert;
+    if (cMicros - pTimeVert >= (vertRampPeriod) ) {
+      PORTB = PORTB^B00000010;
+  delayMicroseconds(stepDelay);
+  PORTB = PORTB|B00000010;
+      //stepVertical();
+      pTimeVert = cMicros;
 
     }
 
@@ -483,10 +558,29 @@ void runspd(){
       pMillis = cMillis; // update previous time
 
     }
+
+    
+  progEndTime =micros();
+
+  diff = progEndTime - progStartTime;
+
+  diffMean= (diffMean+diff);
+
+  //if(progCount == 100){Serial.println(diffMean/100); diffMean=0; progCount=0; }
+
+//  if(printsteptime){
+//    Serial.print("platperiod: ");Serial.print(platRampPeriod);Serial.print("\r\n");
+//    Serial.print("dT: ");Serial.print(per);Serial.print("\r\n");}
+
+  progCount++;
+
   
 }
 
 void slowAll(){
+    cTimePlatform = micros();
+  cTimeVert = micros();
+  cMillis = millis();
 
    platRampPeriod = (1000000 / cplatPPS); // pulse period of platform motor
   vertRampPeriod = (1000000 / cvertPPS);  //pulse period of vertical motor
@@ -604,52 +698,4 @@ int calcRampi() {
   
 }
 
-
-void loop() {
-
-  cTimePlatform = micros();
-  cTimeVert = micros();
-  cMillis = millis();
-
-  if (disableBool) {
-    digitalWrite(enPinPlat, LOW);
-    digitalWrite(enPinVert, LOW);
-    //digitalWrite(enPinPlat, HIGH);
-    
-    z = true;
-  } else {
-    digitalWrite(enPinPlat, HIGH);
-    digitalWrite(enPinVert, HIGH);
-    if (z) {
-      Serial.println("delay");
-      delay(2500);
-      z = false;
-    }
-
-  }
-  
-  if (initBool){
-    homing();
-  }
-
-  if (runspdBool && !disableBool) {
-    runspd();
-  }
-
-  if (slowBool && !disableBool) {
-    slowAll();
-  }
-
-  if (incPlatBool && !disableBool) {
-    stepPlatform();
-    incPlatBool = false;
-  }
-
-  if (incVertBool && !disableBool) {
-    stepVertical();
-    incVertBool = false;
-  }
-
-
-}
 
