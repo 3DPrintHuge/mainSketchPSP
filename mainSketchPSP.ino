@@ -11,12 +11,12 @@ const int dirPinVert  = 8;
 const int dirPinVertgnd = 6;
 const int enPinVert   = 7;
 
-const int topEndPin    = 12;
+const int topEndPin    = A0;
 const int bottomEndPin = A1;
 
 int stepDelay = 100;
 
-double spindlePitch = 5; // [mm]
+double spindlePitch = 4; // [mm]
 
 // platform motor parameters
 float platGain              = 1;
@@ -66,10 +66,12 @@ signed int rampSteps    = 5; //amount of steps in ramp
 
 // switch parameters
 bool topEndBool    = false;  //top endswitch boolean
+int topEndVal      = 0;
 bool bottomEndBool = false;
+int bottomEndVal  = 0;
 
 // random booleans
-bool z  = true;
+bool disTransBool  = true; // used for transition between disabled and enabled
 
 // Command interpreter variables
 String inputString    = "";
@@ -166,30 +168,30 @@ void loop() {
 
       digitalWrite(enPinPlat, LOW);
       digitalWrite(enPinVert, LOW);
-      z = true;
+      disTransBool = true;
       break;
     // ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ //
     case Homing:
-      if (z) {
+      if (disTransBool) {
         digitalWrite(enPinPlat, HIGH);
         digitalWrite(enPinVert, HIGH);
 
         Serial.println("delay");
         delay(2500);
-        z = false;
+        disTransBool = false;
       }
       homing();
       break;
     // ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ //
     case Speed:
       checkEndSwitches();
-      if (z) {
+      if (disTransBool) {
         digitalWrite(enPinPlat, HIGH);
         digitalWrite(enPinVert, HIGH);
 
         Serial.println("delay");
         delay(2500);
-        z = false;
+        disTransBool = false;
       }
 
       if (runspdBool) {
@@ -203,18 +205,19 @@ void loop() {
     // ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ //
     case Print:
     vertDirBool= true;
-    vertBool=true;
-    platBool=true;
-        digitalWrite(dirPinVert, HIGH);
+    //vertBool=true;
+    //platBool=true;
+    digitalWrite(dirPinVert, HIGH);
     digitalWrite(dirPinVertgnd, LOW);
-      //checkEndSwitches();
-      if (z) {
+    
+      checkEndSwitches();
+      if (disTransBool) {
         digitalWrite(enPinPlat, HIGH);
         digitalWrite(enPinVert, HIGH);
 
         Serial.println("delay");
         delay(2500);
-        z = false;
+        disTransBool = false;
       }
 
       if (printBool) {
@@ -748,7 +751,8 @@ void slowAll() {
 void homing() {
 
 
-  topEndBool = digitalRead(topEndPin);
+  topEndVal = analogRead(topEndPin);
+  topEndBool= switchValtoBool(topEndVal);
 
 
   if (H == 0) {
@@ -902,30 +906,48 @@ int calcRampi() {
 
 }
 
+bool switchValtoBool(int switchVal){
+  if (switchVal>650){ return true;}
+  else {return false;}
+}
+
 void checkEndSwitches() {
-  topEndBool = digitalRead(topEndPin);
-  bottomEndBool = digitalRead(bottomEndPin);
+  topEndVal = analogRead(topEndPin);
+  topEndBool= switchValtoBool(topEndVal);
+  
+  bottomEndVal = analogRead(bottomEndPin);
+  bottomEndBool= switchValtoBool(bottomEndVal);
 
   if (topEndBool) {
     Serial.println("topSwitch");
     vertDirBool = true;
     setDir();
-
-    for (int i=0; i<600; i++) {
-      topEndBool = digitalRead(topEndPin);
+    
+    while(topEndBool) {
+      topEndVal = analogRead(topEndPin);
+      topEndBool= switchValtoBool(topEndVal);
       stepVertical();
       delayMicroseconds(300);
 
     }
+
+//    for (int i=0; i<600; i++) {
+//      topEndVal = analogRead(topEndPin);
+//      topEndBool= switchValtoBool(topEndVal);
+//      stepVertical();
+//      delayMicroseconds(300);
+//
+//    }
     mode = DisableAll;
   }
 
-  if (bottomEndBool) {
+  if (bottomEndBool && !vertDirBool) {
     Serial.println("bottomSwitch");
     vertDirBool = false;
     setDir();
     while (bottomEndBool) {
-      bottomEndBool = digitalRead(bottomEndPin);
+      bottomEndVal = analogRead(bottomEndPin);
+      bottomEndBool= switchValtoBool(bottomEndVal);
       stepVertical();
       delayMicroseconds(300);
     }
