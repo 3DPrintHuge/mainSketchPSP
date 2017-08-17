@@ -1,4 +1,48 @@
-#include <eRCaGuy_Timer2_Counter.h>
+/* ~~~~~~~~~~~~~~~~~ Polymer Science Park Testopstelling ~~~~~~~~~~~~~~~~~
+ * Author(s):
+ * Sven Dicker - sdsdsven@gmail.com - 0639842173
+ * 
+ * This program is part of the test setup
+ * The setup consists of 3 different components: a pc, an arduino and a labjack
+ * The pc is the master of the wholesetup, the arduino and labjack are the slaves
+ * 
+ * The pc acts as a bridge between the setup and the user. The user fills in certain parameters and methods of control. 
+ *    Then the program calculates the desired control parameters and sends it to the slaves
+ * The arduino is responsible for controlling the motor drivers and reading the endswitches
+ * The labjack is used for sensor input 
+ *  
+ * The arduino receives a certain command and a corresponding parameter via serial communication
+ * There are two types of commands parameter setting commands and excecution commands
+ * Parameter setting commands have a relevant parameter whereas excecution commands do not
+ * However a parameter has to be given to every send command, 
+ * in the case of an excecution command this parameter will usually be 0.
+ * 
+ * Below is the list of commands
+ * 
+    platPPS; pulses per second~
+    platDir; direction (0/1)~
+    platPPR; pulses per revolution~
+    vertPPS; pulses per seconde~
+    vertDir; direction (0/1)~
+    vertPPR; pulses per revolution~
+    setRamp; ramp time in milliseconds~
+    getPlatPos; returns platform position in steps, no value (0)~
+    setLayer; layer height in millimeters~
+  
+    init; no value (0)~
+    slowAll; no value (0)~
+    stopAll; no value (0)~
+    runspd; no value (0)~
+    runprint; no value(0)~
+    incPlat; no value (0)~
+    incVert; no value (0)~
+  
+    enAll; no value (0)~
+    enPlat; no value (0)~
+    enVert; no value (0)~
+    disPlat; no value (0)~
+    disVert; no value (0)~
+ */
 
 const int pulPinPlat    = 5;
 const int dirPinPlat    = 4;
@@ -11,8 +55,8 @@ const int dirPinVert  = 8;
 const int dirPinVertgnd = 6;
 const int enPinVert   = 7;
 
-const int topEndPin    = A0;
-const int bottomEndPin = A1;
+const int topEndPin    = A1;
+const int bottomEndPin = A0;
 
 int stepDelay = 100;
 
@@ -111,7 +155,7 @@ enum Commands { PlatPPS, PlatDir, PlatPPR, MovePlat, IncPlat,
                 Default
               };
 
-enum Mode {DisableAll, Homing, Speed, Print, StepPlatform, StepVertical };
+enum Mode {DisableAll, Break, Homing, Speed, Print, JogVertical, JogPlatform };
 
 Mode mode = DisableAll;
 Commands inputCommand = Default;
@@ -144,9 +188,6 @@ void setup() {
   digitalWrite(dirPinVertgnd, HIGH);
   digitalWrite(enPinVert, HIGH);
 
-
-  timer2.setup();
-
   platPos       = 0;
 
   Serial.begin(2000000);
@@ -171,28 +212,20 @@ void loop() {
       disTransBool = true;
       break;
     // ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ //
+    case Break:
+      runspdBool = false;
+      slowBool = false;
+      printBool = false;
+      
+    break;
     case Homing:
-      if (disTransBool) {
-        digitalWrite(enPinPlat, HIGH);
-        digitalWrite(enPinVert, HIGH);
-
-        Serial.println("delay");
-        delay(2500);
-        disTransBool = false;
-      }
+    checkDisableTransition();
       homing();
       break;
     // ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ //
     case Speed:
+    checkDisableTransition();
       checkEndSwitches();
-      if (disTransBool) {
-        digitalWrite(enPinPlat, HIGH);
-        digitalWrite(enPinVert, HIGH);
-
-        Serial.println("delay");
-        delay(2500);
-        disTransBool = false;
-      }
 
       if (runspdBool) {
         runspd();
@@ -209,16 +242,8 @@ void loop() {
     //platBool=true;
     digitalWrite(dirPinVert, HIGH);
     digitalWrite(dirPinVertgnd, LOW);
-    
+    checkDisableTransition();
       checkEndSwitches();
-      if (disTransBool) {
-        digitalWrite(enPinPlat, HIGH);
-        digitalWrite(enPinVert, HIGH);
-
-        Serial.println("delay");
-        delay(2500);
-        disTransBool = false;
-      }
 
       if (printBool) {
         runprint();
@@ -229,16 +254,16 @@ void loop() {
 
       break;
     // ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ //
-    case StepPlatform:
+    case JogPlatform:
+    checkDisableTransition();
       checkEndSwitches();
-      stepPlatform();
-      incPlatBool = false;
+      runspd();
       break;
     // ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ //
-    case StepVertical:
+    case JogVertical:
+    checkDisableTransition();
       checkEndSwitches();
-      stepVertical();
-      incVertBool = false;
+      runspd();
       break;
     default:
       break;
@@ -314,37 +339,37 @@ void decodeMessage() {
   //  LIST OF COMMANDS
   //  command; value~
   //
-  //  platPPS; pulses per second~
-  //  platDir; direction (0/1)~
-  //  platPPR; pulses per revolution~
-  //  vertPPS; pulses per seconde~
-  //  vertDir; direction (0/1)~
-  //  vertPPR; pulses per revolution~
-  //  setRamp; ramp time in milliseconds~
-  //  getPlatPos; returns platform position in steps, no value (0)~
-  //  setLayer; layer height in millimeters~
-  //
-  //  init; no value (0)~
-  //  slowAll; no value (0)~
-  //  stopAll; no value (0)~
-  //  runspd; no value (0)~
-  //  runprint; no value(0)~
-  //  incPlat; no value (0)~
-  //  incVert; no value (0)~
-  //
-  //  enAll; no value (0)~
-  //  enPlat; no value (0)~
-  //  enVert; no value (0)~
-  //  disPlat; no value (0)~
-  //  disVert; no value (0)~
+//    platPPS; pulses per second~
+//    platDir; direction (0/1)~
+//    platPPR; pulses per revolution~
+//    vertPPS; pulses per seconde~
+//    vertDir; direction (0/1)~
+//    vertPPR; pulses per revolution~
+//    setRamp; ramp time in milliseconds~
+//    getPlatPos; returns platform position in steps, no value (0)~
+//    setLayer; layer height in millimeters~
+//  
+//    init; no value (0)~
+//    slowAll; no value (0)~
+//    stopAll; no value (0)~
+//    runspd; no value (0)~
+//    runprint; no value(0)~
+//    incPlat; no value (0)~
+//    incVert; no value (0)~
+//  
+//    enAll; no value (0)~
+//    enPlat; no value (0)~
+//    enVert; no value (0)~
+//    disPlat; no value (0)~
+//    disVert; no value (0)~
 
 
   //prototype
-  //    else if (commandString == "command") {
-  //      doStuff
-  //
-  //      commandString = "";
-  //    }
+//      else if (commandString == "command") {
+//        doStuff
+//  
+//        commandString = "";
+//      }
 
 
   //-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-//
@@ -524,24 +549,32 @@ void decodeMessage() {
   }
 
   //send a pulse to platform motor
-  else if (commandString == "incPlat") {
-
-    incPlatBool = true;
+  else if (commandString == "jogPlat") {
+    platBool=true;
+    vertBool=false;
     disableBool = false;
-    mode = StepPlatform;
+    mode = JogPlatform;
 
     commandString = ""; //clear string
   }
 
   //send a pulse to vertical motor
-  else if (commandString == "incVert") {
-    incVertBool = true;
+  else if (commandString == "jogVert") {
+    vertBool= true;
+    platBool= false;
     disableBool = false;
-    mode = StepVertical;
+    mode = JogVertical;
 
     commandString = ""; //clear string
   }
 
+  else if (commandString == "break") {
+    vertBool=true;
+    platBool= true;
+    mode= Break;
+
+    commandString = "";
+  }
   // ENABLE/DISABLE MOTORS
   else if (commandString == "enAll") {
     platBool = true;
@@ -778,15 +811,23 @@ void homing() {
     digitalWrite(enPinVert, HIGH);
     delay(10);
 
-      for (int i = 0; i < 600; i++) {
-        Serial.println(topEndBool);
-          PORTB = PORTB ^ B00000010;    //SWITCH POLARITY OF PIN 9, THIS IS FASTER THAN DIGITALWRITE()
-          delayMicroseconds(10);
-          PORTB = PORTB | B00000010;    //SWITCH POLARITY OF PIN 9, THIS IS FASTER THAN DIGITALWRITE()
+        while(topEndBool) {
+      topEndVal = analogRead(topEndPin);
+      topEndBool= switchValtoBool(topEndVal);
+      stepVertical();
+      delayMicroseconds(300);
 
-        delayMicroseconds(300);
-      
-      }
+    }
+
+//      for (int i = 0; i < 600; i++) {
+//        Serial.println(topEndBool);
+//          PORTB = PORTB ^ B00000010;    //SWITCH POLARITY OF PIN 9, THIS IS FASTER THAN DIGITALWRITE()
+//          delayMicroseconds(10);
+//          PORTB = PORTB | B00000010;    //SWITCH POLARITY OF PIN 9, THIS IS FASTER THAN DIGITALWRITE()
+//
+//        delayMicroseconds(300);
+//      
+//      }
       H=2;
   }
 
@@ -938,10 +979,11 @@ void checkEndSwitches() {
 //      delayMicroseconds(300);
 //
 //    }
-    mode = DisableAll;
+  if(!topEndBool){
+    mode = DisableAll;}
   }
 
-  if (bottomEndBool && !vertDirBool) {
+  if (bottomEndBool) {
     Serial.println("bottomSwitch");
     vertDirBool = false;
     setDir();
@@ -951,10 +993,21 @@ void checkEndSwitches() {
       stepVertical();
       delayMicroseconds(300);
     }
-    mode = DisableAll;
-
+      if(!bottomEndBool){
+    mode = DisableAll;}
   }
 
+}
 
+void checkDisableTransition(){
+      if (disTransBool) {
+        digitalWrite(enPinPlat, HIGH);
+        digitalWrite(enPinVert, HIGH);
+
+        Serial.println("delay");
+        delay(2500);
+        disTransBool = false;
+      }
+  
 }
 
