@@ -5,17 +5,47 @@
   
   This program is part of a test setup for large scale 3D printing. The system consists of 3 different controlling components: a pc, an arduino and a labjack. The pc is the master of the wholesetup, the arduino and labjack are slaves.
      
-  The arduino is responsible for controlling the motor drivers and reading the endswitches. The parameters and methods/modes of controlling the motor drivers are based on commands received over serial communication.   There are two types of commands parameter: parameter commands and excecution commands. Parameter commands have a relevant parameter whereas excecution commands do not. However a parameter has to be given to every send command, in the case of an excecution command this parameter will usually be 0 but the value is redundant.   
+  The arduino is responsible for controlling the motor drivers and reading the endswitches. The parameters and methods/modes of controlling the motor drivers are based on commands received over serial communication.   
+  
+  There are two types of commands: parameter commands and excecution commands. Parameter commands have a relevant parameter whereas excecution commands do not. However a parameter has to be given to every send command, in the case of an excecution command this parameter will usually be 0 but the value is redundant.   
   
 
 ## The program
-Every arduino program has two main functions: `setup()` and `loop()`. There is also a third function which is usually hidden but used in this application `serialEvent()`. `serialEvent()` is triggered after every `loop()` itteration.
+Every arduino program has two main functions: `setup()` and `loop()`. There is also a third function which is usually hidden but used in this application `serialEvent()`. `serialEvent()` is triggered after every `loop()` itteration, and excecuted when data is available.
 
 ### `serialEvent()`
-The function `serialEvent()` looks for a stream of data over USB. If data is available the data will be extracted from the stream and is inpected character by character. Flags are added to the command string to tell the difference between the command and the parameter. The command and parameter are build as a global strings `inputString` and `valString` which can be interpreted by the function `decodeMessage()`. When an end flag is detected the function `decodeMessage()` is called.
+The function `serialEvent()` looks for a stream of data over USB. If data is available the new data will be extracted from the stream and is inpected character by character. Flags are added in the command string to tell the difference between the command and the parameter. Commands are closed by a semicolon `;` the whole string is closed by a tilde `~`. The command and parameter are build as the global strings `inputString` and `valString` which can be interpreted by the function `decodeMessage()`. When the end flag is detected the function `decodeMessage()` is called.
 
 ### `decodeMessage()`
   The function `decodeMessage` is used as command interpreter, `inputString` is renamed to `commandString` and `valString` is casted to a double type and is renamed to `value`. The interpreter looks at `commandString` and compares it a set of known commands. If `commandString` equals a known command certain variables will be set accordingly. 
+ 
+ List of parameter commands:
+ * platPPS; pulses per second~ 
+ * platDir; direction (0/1)~
+ * platPPR; pulses per revolution~
+ * vertPPS; pulses per seconde~
+ * vertDir; direction (0/1)~
+ * vertPPR; pulses per revolution~
+ * setRamp; ramp time in milliseconds~
+ * getPlatPos; returns platform position in steps, no value (0)~
+ * setLayer; layer height in millimeters~ 
+ 
+ List of execution commands:
+* init; no value (0)~
+* slowAll; no value (0)~
+* stopAll; no value (0)~
+* runspd; no value (0)~
+* runprint; no value(0)~
+* jogPlat; no value (0)~
+ * jogVert; no value (0)~
+ * break; no value (0)~ 
+ 
+ Disable/enable motors:
+ * enAll; no value (0)~
+ * enPlat; no value (0)~
+ * enVert; no value (0)~
+ * disPlat; no value (0)~
+ * disVert; no value (0)~
 
 ### `loop()`
 The function `loop()` is run continuously and consists of a switch statement which control the mode and two timers `cMicros` and `cMillis`. There are 7 modes/cases: 
@@ -56,7 +86,7 @@ When the mode `JogVertical` is active the function `runspd()` is called. Before 
 ### `runspd()`
 The function `runspd()` controls the motor drivers based on speed. The drivers are pulsed with a certain period, because the two motors have different speeds they are pulsed seperately. When the elapsed time is greater than or equal to the pulse period the motor is pulsed with the function `stepPlatform` or `stepVertical`.
 
-`runspd()` also incorperates a ramp function, the ramp function increments/decrements the pulse period every interval. The ramp interval is a constant `rampInterval` when the elapsed time is greater than or equal to `rampInterval` the pulse period for each motor is incremented and the timer is reset. 
+`runspd()` also incorporates a ramp function, the ramp function increments/decrements the pulse period every `rampInterval`. The ramp interval is a constant, when the elapsed time is greater than or equal to `rampInterval` the pulse frequency (`platPPS`/ `vertPPS`) for each motor is incremented and the timer is reset. 
 
 ### `runprint()`
 The function 'runprint()' controls the platform motor similarly to `runspd()`. The vertical motor is only activated when `dropBool == true`. `dropBool` is emitted from the function `stepPlatform`, when the platform has completed one full rotation `dropBool` will become `true`. The platform will then be pulsed with a constant period until the desired position is reached. When the desired position is reached `dropBool` becomes `false`. 
@@ -66,3 +96,8 @@ The function `slowAll()` decrements the pulses period for both motors until they
 
 ### `homing()`
 When the function `homing` is called, first the top end switch is checked to see if it is not active. When the end switch is not active the vertical direction will be set upward and the vertical motor will be pulsed until the switch is pressed. When the switch is pressed the verttical motor will stop and reverse the direction. The the motor will drop until the switch is released. When the switch is released the `DisableAll` mode is activated.
+
+### `calcRampi()`
+The function `calcRampi()` every time a new command is received. The motors ramp up and down by incrementing/decrementing the pulse frequency. This is done in fixed steps, `calcRampi()` calculates these steps. 
+
+
