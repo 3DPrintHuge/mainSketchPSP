@@ -47,6 +47,8 @@ The function `serialEvent()` looks for a stream of data over USB. If data is ava
  * disPlat; no value (0)~
  * disVert; no value (0)~
 
+----
+
 ### `loop()`
 The function `loop()` is run continuously and consists of a switch statement which control the mode and two timers `cMicros` and `cMillis`. There are 7 modes/cases: 
   
@@ -82,6 +84,8 @@ When the mode `JogPlatform` is active the function `runspd()` is called. Before 
 
 #### `JogVertical`
 When the mode `JogVertical` is active the function `runspd()` is called. Before `runspd()` is called the end switches are checked to see if either one is active if that is the case the program will switch to `DisableAll`. When the command is received the platform motor is automatically disabled.
+
+----
 
 ### `runspd()`
 The function `runspd()` controls the motor drivers based on speed. The drivers are pulsed with a certain period, because the two motors have different speeds they are pulsed seperately. When the elapsed time is greater than or equal to the pulse period the motor is pulsed with the function `stepPlatform` or `stepVertical`.
