@@ -71,7 +71,7 @@ When the mode `DisableAll` is active all motors will be disabled by pulling the 
 When the mode `Break` is active all motors will remain enabled but they wont be driven.
 
 #### `Homing`
-When the mode `Homing` is active the function `homing()` is called. In `homing()`
+When the mode `Homing` is active the function `homing()` is called. In `homing()` the platform is moved upward until the top end switch is activated. When the top end switch is active the platform will stop and drop until the switch is inactive. When the switch is released the program will go into `DisableAll` mode.
 
 #### `Speed`
 When the mode `Speed` is active the functions `runspd()` or `slowAll()` will be called based on the booleans `runspdBool` and `slowBool`. Before either function is called the end switches are checked to see if either one is active if that is the case the program will switch to `DisableAll`.
