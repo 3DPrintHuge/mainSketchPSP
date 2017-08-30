@@ -1,24 +1,39 @@
-/* ~~~~~~~~~~~~~~~~~ Polymer Science Park Testopstelling ~~~~~~~~~~~~~~~~~
+/*  
+ *  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *  ~~~~~~~~~~~~~~~~  Polymer Science Park Testopstelling ~~~~~~~~~~~~~~~~
+ *  ~~~~~~~~~~~~~~~~          A R D U I N O               ~~~~~~~~~~~~~~~~
+ *  ~~~~~~~~~~~~~~~~          18 - 8 - 2017               ~~~~~~~~~~~~~~~~
+ *  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *  
  * Author(s):
  * Sven Dicker - sdsdsven@gmail.com - 0639842173
  * 
- * This program is part of the test setup
- * The setup consists of 3 different components: a pc, an arduino and a labjack
- * The pc is the master of the wholesetup, the arduino and labjack are the slaves
- * 
- * The pc acts as a bridge between the setup and the user. The user fills in certain parameters and methods of control. 
- *    Then the program calculates the desired control parameters and sends it to the slaves
- * The arduino is responsible for controlling the motor drivers and reading the endswitches
- * The labjack is used for sensor input 
+*/
+/* 
  *  
- * The arduino receives a certain command and a corresponding parameter via serial communication
- * There are two types of commands parameter setting commands and excecution commands
- * Parameter setting commands have a relevant parameter whereas excecution commands do not
+ * This program is part of a test setup for large scale 3D printing
+ * The controller architecture consists of 3 different components: a pc, an arduino and a labjack
+ * The pc is the master of the wholesetup, the arduino and labjack are slaves.
+ * 
+ * The pc is resonsible for the interaction between the operator and the setup. 
+ * The user fills in certain parameters and chooses a method of controlling the setup, 
+ * methods like controling individual motors or running a test print. 
+ * Based on the control parameters, the program then calculates certain parameters 
+ * which are relevant for controlling the stepper drivers. Then the parameters are send
+ * along with an excecution command which will activate a certain mode which are explained below.
+ *    
+ * The arduino is responsible for controlling the motor drivers and reading the endswitches.
+ * The parameters and methods/modes of controlling the motor drivers are based on commands received
+ * over serial communication. There are two types of commands parameter: parameter commands and excecution commands.
+ * Parameter commands have a relevant parameter whereas excecution commands do not.
  * However a parameter has to be given to every send command, 
  * in the case of an excecution command this parameter will usually be 0.
- * 
+ * *
  * Below is the list of commands
  * 
+ * 
+*/
+/* ============= LIST OF COMMANDS =============
     platPPS; pulses per second~
     platDir; direction (0/1)~
     platPPR; pulses per revolution~
@@ -34,8 +49,8 @@
     stopAll; no value (0)~
     runspd; no value (0)~
     runprint; no value(0)~
-    incPlat; no value (0)~
-    incVert; no value (0)~
+    jogPlat; no value (0)~
+    jogVert; no value (0)~
   
     enAll; no value (0)~
     enPlat; no value (0)~
@@ -43,6 +58,27 @@
     disPlat; no value (0)~
     disVert; no value (0)~
  */
+/*
+ * There are 6 different modes: disabled, break, homing, speed, print and jog.
+ * 
+ * - DisableAll - disables all motors, no current will be applied the windings so the motrs are free to rotate
+ * this is the default mode.
+ * 
+ * - Break - stops pulsing the motor drivers but keeps the motors enable. This mode is used after jog mode because
+ * of the delay that occurs in the drivers when the motors switch from disabled to enabled.
+ * 
+ * - Homing - sets the vertical direction upward and then enables the vertical motor. When the top end witch is activated
+ * the motors stop and move downward until the switch is deactivated. Then the DisableAll mode is activated.
+ * 
+ * - Speed - motors are driven based on a set pulse period for each motor
+ * 
+ * - Print - platform moter is driven based on speed, vertical motor is driven so that the platform will drop a certain
+ * distance for every rotation.
+ * 
+ * - JogPlatform/JogVertical - will drive a certain motor based on the set pulse period, pretty musch the same as Speed only 
+ * for one specified motor.
+ * 
+*/
 
 const int pulPinPlat    = 5;
 const int dirPinPlat    = 4;
@@ -68,27 +104,32 @@ int encPos= 0;
 
 int stepDelay = 100;
 
-double spindlePitch = 4; // [mm]
+const double spindlePitch = 4;
+const int platRed         = 3;    //reduction between platform and motor
 
 // platform motor parameters
 float platGain              = 1;
 signed long dplatPPS        = 1600 * platGain; // desired platform pulse frequence [pulses/second]
 unsigned long platPeriod    = 625;  // desired platform pulse period  [microseconds]
 unsigned long platPPR       = 1600; // pulses per revolution on platform motor driver
+
 unsigned long platPos       = 0;    // platform motor position [steps]
 unsigned long setPlatPos    = 0;    // desired platform motor position [steps]
-int platRed                 = 3;    //reduction between platform and motor
+
 
 // vertical motor parameters
 float vertGain              = 1;
 signed long dvertPPS      = 1600 * vertGain; // desired vertical pulse frequency [pulses/second]
 unsigned long vertPeriod    = 625;  // desired verticval period [microseconds]
 unsigned long vertPPR       = 1600; // pulses per revolution on vertical motor driver
+
 unsigned long vertPos       = 0;    // vertical motor position [steps]
-double vertPosmm     = 0;
-double dvertPosmm     = 0;
-double layerHeight   = 10;
 unsigned long setVertPos    = 0;    // desired vertical motor position [steps]
+double vertPosmm            = 0;    // vertical platform position [mm]
+double dvertPosmm           = 0;    // desired vertical position [mm]
+
+double layerHeight          = 1;    // layer height during print mode [mm]
+
 
 // platform motor variables
 unsigned long platRampPeriod  = 0;  // platform pulse period during ramping [microseconds]
@@ -138,10 +179,10 @@ bool cmdBool          = false;
 bool disableBool  = true;   // motors are disabled [true] motors are enabled [false]
 bool slowBool     = false;  // shows if slowAll command is active
 bool runspdBool   = false;  // shows if runspd command is active
-bool printBool    = false;
-bool dropBool     = false;
-bool platBool     = true;
-bool vertBool     = true;
+bool printBool    = false;  // shows if print cammand is active
+bool dropBool     = false;  // shows if platform has to be dropped
+bool platBool     = true;   // shows if platform motor is enabled
+bool vertBool     = true;   // shows if vetical motor is enabled
 bool incPlatBool  = false;  // shows if incPlat command is active
 bool incVertBool  = false;  // shows if incVert command is active
 bool platDirBool  = false;  // shows if platDirBool command is active
@@ -257,6 +298,7 @@ void loop() {
 
       break;
     // ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ //
+    
     case Print:
     vertDirBool= true;
     //vertBool=true;
@@ -285,8 +327,6 @@ void loop() {
     checkDisableTransition();
       checkEndSwitches();
       runspd();
-      break;
-    default:
       break;
       // ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ //
   }
