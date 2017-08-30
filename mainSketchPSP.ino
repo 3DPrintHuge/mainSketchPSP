@@ -49,7 +49,6 @@ const int dirPinPlat    = 4;
 const int dirPinPlatgnd = 2;
 const int enPinPlat     = 3;
 
-
 const int pulPinVert  = 9;
 const int dirPinVert  = 8;
 const int dirPinVertgnd = 6;
@@ -57,6 +56,15 @@ const int enPinVert   = 7;
 
 const int topEndPin    = A1;
 const int bottomEndPin = A0;
+
+const int pinEncI= A7;
+const int pinEncA= A6;
+const int pinEncB= A5;
+
+int valEncI=0;
+float valEncA=0;
+int valEncB=0;
+int encPos= 0;
 
 int stepDelay = 100;
 
@@ -168,6 +176,10 @@ void setup() {
   pinMode(topEndPin, INPUT );
   pinMode(bottomEndPin, INPUT);
 
+  pinMode(pinEncI, INPUT);
+  pinMode(pinEncA, INPUT);
+  pinMode(pinEncB, INPUT);
+
   pinMode (pulPinPlat, OUTPUT);
   pinMode (enPinPlat, OUTPUT);
   pinMode (dirPinPlat, OUTPUT);
@@ -177,6 +189,7 @@ void setup() {
   pinMode (enPinVert, OUTPUT);
   pinMode (dirPinVert, OUTPUT);
   pinMode (dirPinVertgnd, OUTPUT);
+
 
   digitalWrite(pulPinPlat, HIGH);
   digitalWrite(dirPinPlat, HIGH);
@@ -199,6 +212,12 @@ void loop() {
   // put your main code here, to run repeatedly:
   cMicros = micros();
   cMillis = millis();
+  
+  valEncA= analogRead(pinEncA);
+
+  if(valEncA<800){
+    encPos++;
+  }
 
   switch (mode) {
 
@@ -216,6 +235,8 @@ void loop() {
       runspdBool = false;
       slowBool = false;
       printBool = false;
+      digitalWrite(enPinPlat, HIGH);
+      digitalWrite(enPinVert, HIGH);
       
     break;
     case Homing:
@@ -463,7 +484,13 @@ void decodeMessage() {
   }
 
   else if (commandString == "getPlatPos") {
-    Serial.println(platPos);
+    Serial.print("Platpos: ");
+    Serial.print(platPos);
+    Serial.print("\n\r");
+    
+    Serial.print("EncPos: ");
+    Serial.print(encPos);
+    Serial.print("\n\r");
 
     commandString = "";
   }
@@ -482,6 +509,13 @@ void decodeMessage() {
     initBool = true;
     disableBool = false;
     mode = Homing;
+
+    commandString = "";
+  }
+
+  else if (commandString == "break") {
+    mode=Break;
+    
 
     commandString = "";
   }
