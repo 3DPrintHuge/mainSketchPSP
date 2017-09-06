@@ -1,4 +1,4 @@
-/* ~~~~~~~~~~~~~~~~~ Polymer Science Park Testopstelling ~~~~~~~~~~~~~~~~~
+ /* ~~~~~~~~~~~~~~~~~ Polymer Science Park Testopstelling ~~~~~~~~~~~~~~~~~
  * Author(s):
  * Sven Dicker - sdsdsven@gmail.com - 0639842173
  * 
@@ -290,12 +290,12 @@ void loop() {
 
 // ------- COMMUNICATION FUNCTIONS ------- //
 void serialEvent() {
-
+  cmdBool = false;
   while (Serial.available()) {
 
     char inChar = (char)Serial.read();
     returnEntry += inChar;
-
+/*
     //build input to command
     if (cmdBool == false && inChar != ';') {
       inputString += inChar;
@@ -319,6 +319,23 @@ void serialEvent() {
       //activate decode message function
       decodeMessage();
     }
+*/
+    if (cmdBool == false){
+      if (inChar == ';') {
+        cmdBool = true;
+      } else {
+        inputString += inChar;
+      }
+    } else{
+      if (inChar == '~') {
+        //activate decode message function
+        decodeMessage();
+      } else {
+        valString += inChar;
+      }
+    }
+
+    
 
   }
 
@@ -327,8 +344,6 @@ void serialEvent() {
 void decodeMessage() {
 
   // ~~~~~~~~~~~~~~~~~ get input value ~~~~~~~~~~~~~~~~~ //
-  if (inputString != "" && stringEnd == true) {
-
     value = valString.toDouble();  //change from string to double
     commandString = inputString;
 
@@ -344,7 +359,6 @@ void decodeMessage() {
     valString = "";
     inputString = "";
     stringEnd = false;
-  }
 
   //-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-//
   // + - + - + - + - + - + COMMAND INTERPRETER + - + - + - + - + - + //
