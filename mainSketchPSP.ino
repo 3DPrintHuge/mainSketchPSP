@@ -295,7 +295,6 @@ void serialEvent() {
   while (Serial.available()) {
 
     char inChar = (char)Serial.read();
-     += inChar;
 /*
     //build input to command
     if (cmdBool == false && inChar != ';') {
