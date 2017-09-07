@@ -90,16 +90,16 @@ unsigned long setVertPos    = 0;    // desired vertical motor position [steps]
 
 // platform motor variables
 unsigned long platRampPeriod  = 0;  // platform pulse period during ramping [microseconds]
-signed long cplatPPS          = 1;  // curreny platform pulse frequency [pulses/second]
+signed long cplatPPS          = 1;  // current platform pulse frequency [pulses/second]
 signed long platFreqStep      = 0;  // incemental value for platform pulse frequency while ramping [pulses/second]
 unsigned long cTimePlatform   = 0;  // current time
 unsigned long pTimePlatform   = 0;  // previous time
 int revs                      = 0;
 
 // vertical motor variables
-unsigned long vertRampPeriod  = 0;  // platform pulse period during ramping [microseconds]
-signed long cvertPPS        = 1;  // curreny platform pulse frequency [pulses/second]
-signed long vertFreqStep    = 0;  // incemental value for platform pulse frequency while ramping [pulses/second]
+unsigned long vertRampPeriod  = 0;  // vertical pulse period during ramping [microseconds]
+signed long cvertPPS        = 1;  // current vertical pulse frequency [pulses/second]
+signed long vertFreqStep    = 0;  // incemental value for vertical pulse frequency while ramping [pulses/second]
 unsigned long cTimeVert       = 0;  // current time
 unsigned long pTimeVert       = 0;  // previous time
 
@@ -127,9 +127,7 @@ bool disTransBool  = true; // used for transition between disabled and enabled
 String inputString    = "";
 String valString      = "";
 String commandString  = "";
-String returnEntry    = "";
 double value   = 0;
-bool stringEnd        = false;
 bool cmdBool          = false;
 
 // Command booleans
@@ -291,10 +289,13 @@ void loop() {
 // ------- COMMUNICATION FUNCTIONS ------- //
 void serialEvent() {
   cmdBool = false;
+  //reset parameters
+  valString = "";
+  inputString = "";
   while (Serial.available()) {
 
     char inChar = (char)Serial.read();
-    returnEntry += inChar;
+     += inChar;
 /*
     //build input to command
     if (cmdBool == false && inChar != ';') {
@@ -355,10 +356,6 @@ void decodeMessage() {
     Serial.print(value);
     Serial.print("\n");
 
-    //reset parameters
-    valString = "";
-    inputString = "";
-    stringEnd = false;
 
   //-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-//
   // + - + - + - + - + - + COMMAND INTERPRETER + - + - + - + - + - + //
@@ -396,7 +393,7 @@ void decodeMessage() {
 //      else if (commandString == "command") {
 //        doStuff
 //  
-//        commandString = "";
+//        
 //      }
 
 
@@ -416,7 +413,7 @@ void decodeMessage() {
     Serial.print( platPeriod);
     Serial.print("\n\r");
 
-    commandString = ""; //clear string
+    
   }
 
   //set platform direction
@@ -431,14 +428,12 @@ void decodeMessage() {
 
     setDir(); //activate direction change function
 
-    commandString = ""; //clear string
+    
   }
 
   //set platform pulses per revolution
   else if (commandString == "platPPR") {
-    platPPR = value; //set platform pulses per period
-
-    commandString = ""; //clear string
+    platPPR = value; //set amount of pulses per platform revolution
   }
 
   //set vertical ppulses per second
@@ -449,7 +444,7 @@ void decodeMessage() {
     Serial.print( dvertPPS);
     Serial.print("\n\r");
 
-    commandString = ""; //clear string
+    
   }
 
   //set vertical direction
@@ -464,14 +459,14 @@ void decodeMessage() {
 
     setDir(); //activate direction change function
 
-    commandString = ""; //clear string
+    
   }
 
   //set vertical pulsesper revolution
   else if (commandString == "vertPPR") {
     vertPPR = value; //set vertical pulses per revolution
 
-    commandString = ""; //clear string
+    
   }
 
   //set ramptime in [ms]
@@ -481,13 +476,13 @@ void decodeMessage() {
     Serial.print(rampTime);
     Serial.print("\n\r");
 
-    commandString = ""; //clear string
+    
   }
 
   else if (commandString == "setInterval") {
     rampInterval = value;
 
-    commandString = "";
+    
   }
 
   else if (commandString == "getPlatPos") {
@@ -499,13 +494,13 @@ void decodeMessage() {
     Serial.print(encPos);
     Serial.print("\n\r");
 
-    commandString = "";
+    
   }
 
   else if (commandString == "setLayer") {
     layerHeight = value;
 
-    commandString = "";
+    
   }
 
   //-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~//
@@ -517,14 +512,14 @@ void decodeMessage() {
     disableBool = false;
     mode = Homing;
 
-    commandString = "";
+    
   }
 
   else if (commandString == "break") {
     mode=Break;
     
 
-    commandString = "";
+    
   }
 
   //slow all motors
@@ -535,7 +530,7 @@ void decodeMessage() {
 
     //rampi=rampSteps;
 
-    commandString = "";
+    
   }
 
   //emergency stop all motors
@@ -546,7 +541,7 @@ void decodeMessage() {
     mode = DisableAll;
     Serial.println("disabled");
 
-    commandString = ""; //clear string
+    
   }
 
   //run platform based on speed
@@ -573,7 +568,7 @@ void decodeMessage() {
 
     //rampi=0;
 
-    commandString = ""; //clear string
+    
   }
 
   else if (commandString == "runprint") {
@@ -586,7 +581,7 @@ void decodeMessage() {
     disableBool = false;
     mode = Print;
 
-    commandString = "";
+    
   }
 
   //send a pulse to platform motor
@@ -596,7 +591,7 @@ void decodeMessage() {
     disableBool = false;
     mode = JogPlatform;
 
-    commandString = ""; //clear string
+    
   }
 
   //send a pulse to vertical motor
@@ -606,7 +601,7 @@ void decodeMessage() {
     disableBool = false;
     mode = JogVertical;
 
-    commandString = ""; //clear string
+    
   }
 
   else if (commandString == "break") {
@@ -614,7 +609,7 @@ void decodeMessage() {
     platBool= true;
     mode= Break;
 
-    commandString = "";
+    
   }
   // ENABLE/DISABLE MOTORS
   else if (commandString == "enAll") {
@@ -629,7 +624,7 @@ void decodeMessage() {
       cvertPPS = 1;
     }
 
-    commandString = "";
+    
   }
 
   else if (commandString == "enPlat") {
@@ -641,7 +636,7 @@ void decodeMessage() {
       cplatPPS = 1;
     }
 
-    commandString = "";
+    
   }
 
   else if (commandString == "enVert") {
@@ -652,22 +647,25 @@ void decodeMessage() {
       cvertPPS = 1;
     }
 
-    commandString = "";
+    
   }
 
   else if (commandString == "disPlat") {
     platBool = false;
     digitalWrite (enPinPlat, LOW);
 
-    commandString = "";
+    
   }
 
   else if (commandString == "disVert") {
     vertBool = false;
     digitalWrite (enPinVert, LOW);
 
-    commandString = "";
+    
+  } else{ //no command is recognised
+    Serial.println("Command not recognised");
   }
+  commandString = ""; //clear string
 
   //-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+//
   // + - + - + - + END OF INTERPRETER + - + - + - + //
@@ -777,6 +775,7 @@ void runprint() {
 void slowAll() {
 
   platRampPeriod = (1000000 / cplatPPS); // pulse period of platform motor
+  
   vertRampPeriod = (1000000 / cvertPPS);  //pulse period of vertical motor
   // ^ period will increase with respect to rampi and will eventually reach value set by the user ^
 
